@@ -32,8 +32,9 @@ const ProfilePage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['moments'] });
       alert("All your moments have been deleted.");
     },
-    onError: (error: any) => {
-      alert(`Error clearing data: ${error.message}`);
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`Error clearing data: ${message}`);
     }
   });
 
@@ -62,7 +63,7 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="-mt-16">
+    <div >
       <section className="px-6 pb-24 pt-1 relative z-10 space-y-4">
         <div className="p-6 bg-white rounded-2xl border">
           <h2 className="text-lg font-medium text-neutral-900 mb-4">Your Journey</h2>

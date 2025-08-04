@@ -84,8 +84,8 @@ export default function QuickCapture() {
     setCustomDateTime(date);
   };
 
-  return (
-    <section className="p-4 sm:p-6 -mt-10 relative z-10">
+  return (<section className="p-4 sm:p-6 relative z-10">
+    
       <div className="bg-white rounded-2xl shadow-lg border border-neutral-100 p-4 sm:p-6">
         {/* Network Status Indicator */}
         <div className="flex items-center justify-center mb-4">

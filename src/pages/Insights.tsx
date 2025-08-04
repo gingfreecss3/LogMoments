@@ -36,7 +36,7 @@ const InsightsPage: React.FC = () => {
   const topMood = Object.entries(moodCounts).sort(([,a], [,b]) => b - a)[0];
 
   return (
-    <div className="-mt-16">
+    <div >
       <section className="px-6 pb-6 pt-1 relative z-10">
         <div className="bg-white rounded-2xl shadow-lg border border-neutral-100 p-6">
           <h2 className="text-lg font-medium text-neutral-900 mb-6">Your emotional journey</h2>
