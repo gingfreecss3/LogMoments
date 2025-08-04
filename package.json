@@ -76,7 +76,7 @@
   "@types/react-dom": "^19.1.6",
   
     
-  "@vitejs/plugin-react": "^4.6.0",
+  "@vitejs/plugin-react": "^4.7.0",
   
     
   "autoprefixer": "^10.4.21",
@@ -109,7 +109,10 @@
   "typescript-eslint": "^8.35.1",
   
     
-  "vite": "^7.0.4"
+  "vite": "^7.0.4",
+  
+    
+  "vite-plugin-pwa": "^1.0.2"
   
   }
 }

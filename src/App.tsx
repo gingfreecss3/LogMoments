@@ -21,8 +21,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 function App() {
   useEffect(() => {
-    // Initialize sync service
-    syncService.startAutoSync();
+    // Initialize sync service and get cleanup function
+    const cleanup = syncService.startAutoSync();
+    
+    // Clean up on unmount
+    return () => {
+      if (cleanup) cleanup();
+      syncService.cleanup();
+    };
   }, []);
 
   return (

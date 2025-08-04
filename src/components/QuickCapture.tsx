@@ -38,29 +38,55 @@ export default function QuickCapture() {
 
   const createMomentMutation = useMutation({
     mutationFn: async (newMoment: { content: string; feeling: string; created_at: string; user_id: string }) => {
-      if (!isOnline) {
-        // Save to offline storage
-        const offlineMoment = offlineStorage.saveMoment(newMoment);
-        setOfflineMessage("Saved offline - will sync when connected");
-        setTimeout(() => setOfflineMessage(""), 3000);
-        return offlineMoment;
-      }
+      // Always save to offline storage first for reliability
+      const offlineMoment = offlineStorage.saveMoment(newMoment);
 
-      const { error } = await supabase.from('moments').insert(newMoment);
-      if (error) throw error;
+      // If online, try to sync immediately
+      if (isOnline) {
+        try {
+          const { error } = await supabase.from('moments').insert(newMoment);
+          if (error) throw error;
+          
+          // If successful, mark as synced
+          offlineStorage.markAsSynced(offlineMoment.id);
+          offlineStorage.removeSyncedMoments();
+          
+          return { ...newMoment, id: offlineMoment.id, synced: true };
+        } catch (error) {
+          console.error('Online save failed, keeping as offline:', error);
+          // Keep it as unsynced, it will sync later
+          return offlineMoment;
+        }
+      }
+      
+      return offlineMoment;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Always update the UI
       queryClient.invalidateQueries({ queryKey: ['moments'] });
       setContent("");
       setCustomDateTime(null);
       setIsAdjustingTime(false);
       
+      // Show appropriate message
+      if (data.synced) {
+        setOfflineMessage("Moment captured!");
+      } else {
+        setOfflineMessage("Saved offline - will sync when connected");
+      }
+      
+      // Clear message after delay
+      setTimeout(() => setOfflineMessage(""), 3000);
+      
+      // If we're online, trigger a sync to catch any pending items
       if (isOnline) {
-        alert("Moment captured!");
+        syncService.syncOfflineData();
       }
     },
     onError: (error: any) => {
-      alert(`Error: ${error.message}`);
+      console.error('Error saving moment:', error);
+      setOfflineMessage("Error saving moment. It's been saved offline.");
+      setTimeout(() => setOfflineMessage(""), 3000);
     },
   });
 
