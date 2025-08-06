@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Heart, Edit3, Wifi, WifiOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../supabase";
 import { format } from "date-fns";
-import { offlineStorage } from "../lib/offlineStorage";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
 import { syncService } from "../lib/syncService";
+import { db } from "../lib/db";
 
 // Simple mood detection based on keywords
 const detectMood = (text: string): string => {
@@ -24,9 +22,8 @@ export default function QuickCapture() {
   const [content, setContent] = useState("");
   const [customDateTime, setCustomDateTime] = useState<Date | null>(null);
   const [isAdjustingTime, setIsAdjustingTime] = useState(false);
-  const [offlineMessage, setOfflineMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { isOnline } = useNetworkStatus();
   const now = new Date();
@@ -36,72 +33,61 @@ export default function QuickCapture() {
     syncService.startAutoSync();
   }, []);
 
-  const createMomentMutation = useMutation({
-    mutationFn: async (newMoment: { content: string; feeling: string; created_at: string; user_id: string }) => {
-      // Always save to offline storage first for reliability
-      const offlineMoment = offlineStorage.saveMoment(newMoment);
-
-      // If online, try to sync immediately
-      if (isOnline) {
-        try {
-          const { error } = await supabase.from('moments').insert(newMoment);
-          if (error) throw error;
-          
-          // If successful, mark as synced
-          offlineStorage.markAsSynced(offlineMoment.id);
-          offlineStorage.removeSyncedMoments();
-          
-          return { ...newMoment, id: offlineMoment.id, synced: true };
-        } catch (error) {
-          console.error('Online save failed, keeping as offline:', error);
-          // Keep it as unsynced, it will sync later
-          return offlineMoment;
-        }
-      }
-      
-      return offlineMoment;
-    },
-    onSuccess: (data) => {
-      // Always update the UI
-      queryClient.invalidateQueries({ queryKey: ['moments'] });
-      setContent("");
-      setCustomDateTime(null);
-      setIsAdjustingTime(false);
-      
-      // Show appropriate message
-      if (data.synced) {
-        setOfflineMessage("Moment captured!");
-      } else {
-        setOfflineMessage("Saved offline - will sync when connected");
-      }
-      
-      // Clear message after delay
-      setTimeout(() => setOfflineMessage(""), 3000);
-      
-      // If we're online, trigger a sync to catch any pending items
-      if (isOnline) {
-        syncService.syncOfflineData();
-      }
-    },
-    onError: (error: any) => {
-      console.error('Error saving moment:', error);
-      setOfflineMessage("Error saving moment. It's been saved offline.");
-      setTimeout(() => setOfflineMessage(""), 3000);
-    },
-  });
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() || !user) return;
 
-    const momentData = {
-      content: content.trim(),
-      feeling: detectMood(content),
-      created_at: (customDateTime || now).toISOString(),
-      user_id: user.id,
-    };
+    setIsSubmitting(true);
 
-    createMomentMutation.mutate(momentData);
+    try {
+      console.log('Creating new moment...');
+      const nowISO = (customDateTime || now).toISOString();
+      const momentData = {
+        content: content.trim(),
+        feeling: detectMood(content),
+        created_at: nowISO,
+        updated_at: nowISO,
+        user_id: user.id,
+        synced: 0, // Using 0 for false
+      };
+      console.log('Moment data to save:', momentData);
+
+      // Try to add to database
+      try {
+        const id = await db.moments.add(momentData);
+        console.log('Moment saved with ID:', id);
+        
+        // Verify it was saved
+        const savedMoment = await db.moments.get(id);
+        console.log('Retrieved saved moment:', savedMoment);
+        
+        // Reset form
+        setContent("");
+        setCustomDateTime(null);
+        setIsAdjustingTime(false);
+
+        // List all moments for debugging
+        const allMoments = await db.moments.toArray();
+        console.log('All moments in database:', allMoments);
+
+        // Trigger a sync if online
+        if (isOnline) {
+          console.log('Online - triggering sync...');
+          syncService.syncOfflineData().catch(console.error);
+        }
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        // Check if database is accessible
+        const dbInfo = await db.moments.count();
+        console.log('Database record count:', dbInfo);
+        throw dbError;
+      }
+    } catch (error) {
+      console.error('Failed to save moment:', error);
+      alert('Failed to save your moment. Please check the console for details.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const displayDate = customDateTime || now;
@@ -124,13 +110,6 @@ export default function QuickCapture() {
             <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
         </div>
-
-        {/* Offline Message */}
-        {offlineMessage && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-blue-700 text-sm">{offlineMessage}</p>
-          </div>
-        )}
 
         <div className="text-center mb-6">
           <h2 className="text-xl font-medium text-neutral-900 mb-2">How are you feeling?</h2>
@@ -185,7 +164,7 @@ export default function QuickCapture() {
               placeholder="What's on your mind? Every feeling matters..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              disabled={createMomentMutation.isPending}
+              disabled={isSubmitting}
             />
           </div>
           
@@ -193,10 +172,10 @@ export default function QuickCapture() {
           <button 
             type="submit"
             className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white py-3 rounded-xl font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:transform-none"
-            disabled={!content.trim() || createMomentMutation.isPending}
+            disabled={!content.trim() || isSubmitting}
           >
             <Heart className="h-4 w-4 mr-2" />
-            {createMomentMutation.isPending ? "Capturing..." : "Capture this moment"}
+            {isSubmitting ? "Capturing..." : "Capture this moment"}
           </button>
         </form>
       </div>

@@ -1,46 +1,46 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../supabase';
-import { useAuth } from '../context/AuthContext';
+import { useLiveQuery} from 'dexie-react-hooks';
+import { useEffect } from 'react';
 import { format } from 'date-fns';
-import { offlineStorage } from '../lib/offlineStorage';
-import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { Heart, WifiOff } from 'lucide-react';
+import { db } from '../lib/db';
 
 interface MomentsTimelineProps {
   limit?: number;
 }
 
 export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
-  const { user } = useAuth();
-  const { isOnline } = useNetworkStatus();
-
-  const { data: onlineMoments = [], isLoading } = useQuery({
-    queryKey: ['moments', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
+  const allMoments = useLiveQuery(async () => {
+    try {
+      console.log('Loading moments from database...');
+      // First check if the database is accessible
+      const dbInfo = await db.moments.count();
+      console.log('Total moments in database:', dbInfo);
       
-      const { data, error } = await supabase
-        .from('moments')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(limit || 10);
+      // Get all moments with debugging
+      const collection = db.moments.orderBy('created_at').reverse();
+      const moments = limit ? await collection.limit(limit).toArray() : await collection.toArray();
+      
+      console.log('Retrieved moments:', moments);
+      return moments;
+    } catch (error) {
+      console.error('Error loading moments:', error);
+      // Try to get more detailed error info
+      try {
+        const dbInfo = await db.moments.toArray();
+        console.log('Raw database content:', dbInfo);
+      } catch (e) {
+        console.error('Could not access database at all:', e);
+      }
+      return [];
+    }
+  }, [limit]);
+  
+  // Log when moments change
+  useEffect(() => {
+    console.log('MomentsTimeline updated with moments:', allMoments);
+  }, [allMoments]);
 
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user && isOnline,
-  });
-
-  // Get offline moments
-  const offlineMoments = offlineStorage.getOfflineMoments();
-
-  // Combine online and offline moments
-  const allMoments = [...offlineMoments, ...onlineMoments]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, limit || 10);
-
-  if (isLoading && isOnline) {
+  if (!allMoments) {
     return (
       <div className="p-4">
         <div className="animate-pulse space-y-4">
@@ -76,7 +76,7 @@ export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
                     <span>{moment.feeling}</span>
                     <span>{format(new Date(moment.created_at), 'MMM d, h:mm a')}</span>
-                    {moment.isOffline && !moment.synced && (
+                    {!moment.synced && (
                       <span className="text-yellow-600 flex items-center">
                         <WifiOff className="w-3 h-3 mr-1" />
                         Offline
