@@ -38,7 +38,7 @@ export class MySubClassedDexie extends Dexie {
     this.version(2).stores({
       moments: '++id, serverId, created_at, user_id, synced, updated_at, last_sync_attempt',
       preferences: '++id, userId'
-    }).upgrade(tx => {
+    }).upgrade(_tx => {
       // Migration logic for version 2 if needed
     });
 
