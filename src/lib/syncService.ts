@@ -1,11 +1,10 @@
 import { supabase } from '../supabase';
 import { db, type Moment } from './db';
 import { networkStatusStore } from '../hooks/useNetworkStatus';
+import { notificationService } from './notificationService';
 
 export type StorageMode = 'local' | 'cloud';
 type SyncStatus = 0 | 1; // 0 = pending/error, 1 = synced
-
-// Note: Retry delay constant removed as it was unused
 
 interface SyncResult {
   success: boolean;
@@ -146,6 +145,10 @@ class SyncService {
           userId: this.currentUser,
           storageMode: this.storageMode
         });
+      }
+
+      if (successCount > 0) {
+        void notificationService.sendSyncNotification(successCount);
       }
       
       return this.createSyncResult(

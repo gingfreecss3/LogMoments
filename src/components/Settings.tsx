@@ -3,6 +3,7 @@ import { db } from '../lib/db';
 import { syncService } from '../lib/syncService';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { DatabaseStatus } from './DatabaseStatus';
+import { NotificationSettings } from './NotificationSettings';
 
 interface SettingsProps {
   userId: string;
@@ -91,8 +92,11 @@ export function Settings({ userId }: SettingsProps) {
           {storageMode === 'cloud' 
             ? 'Your data will be synced to the cloud when online.'
             : 'Your data will be stored only on this device.'}
-          {'}'}
         </p>
+      </div>
+
+      <div className="mt-6">
+        <NotificationSettings />
       </div>
 
       {storageMode === 'cloud' && (
@@ -124,10 +128,10 @@ export function Settings({ userId }: SettingsProps) {
               You're offline. Connect to the internet to sync your data.
             </p>
           )}
+          
         </div>
       )}
       
-      {/* Database Status - For debugging */}
       <div className="mt-8 border-t pt-6">
         <h3 className="text-lg font-semibold mb-3">Database Status</h3>
         <DatabaseStatus />

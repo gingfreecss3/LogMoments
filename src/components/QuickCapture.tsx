@@ -5,8 +5,9 @@ import { format } from "date-fns";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
 import { syncService } from "../lib/syncService";
 import { db } from "../lib/db";
+import { useMobile } from "../hooks/useMobile";
+import { notificationService } from "../lib/notificationService";
 
-// Simple mood detection based on keywords
 const detectMood = (text: string): string => {
   const lowerText = text.toLowerCase();
   if (lowerText.includes('miss') || lowerText.includes('longing')) return 'Longing';
@@ -26,9 +27,9 @@ export default function QuickCapture() {
   
   const { user } = useAuth();
   const { isOnline } = useNetworkStatus();
+  const { hapticNotification } = useMobile();
   const now = new Date();
 
-  // Start auto sync when component mounts
   useEffect(() => {
     syncService.startAutoSync();
   }, []);
@@ -70,25 +71,28 @@ export default function QuickCapture() {
         const allMoments = await db.moments.toArray();
         console.log('All moments in database:', allMoments);
 
-        // Trigger a sync if online
         if (isOnline) {
           console.log('Online - triggering sync...');
           syncService.syncOfflineData().catch(console.error);
         }
+
+        void notificationService.sendMomentCapturedNotification();
+        void hapticNotification('Success');
       } catch (dbError) {
         console.error('Database error:', dbError);
-        // Check if database is accessible
         const dbInfo = await db.moments.count();
         console.log('Database record count:', dbInfo);
         throw dbError;
       }
     } catch (error) {
       console.error('Failed to save moment:', error);
+      void hapticNotification('Error');
       alert('Failed to save your moment. Please check the console for details.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   const displayDate = customDateTime || now;
 
