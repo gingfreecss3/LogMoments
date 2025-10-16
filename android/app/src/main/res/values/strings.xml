@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LogMoments</string>
+    <string name="title_activity_main">LogMoments</string>
+    <string name="package_name">com.logmoments.app</string>
+    <string name="custom_url_scheme">com.logmoments.app</string>
+</resources>

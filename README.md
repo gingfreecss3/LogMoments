@@ -83,6 +83,8 @@ Every time you have that feeling of longing or missing someone special, you quic
 - **Routing**: React Router DOM
 - **Icons**: Lucide React
 - **Date Handling**: date-fns
+- **Mobile**: Capacitor (iOS & Android native apps)
+- **PWA**: Vite PWA Plugin with Workbox
 
 ## 📱 App Structure
 
@@ -160,6 +162,19 @@ Handles data synchronization:
 - ESLint for code quality
 - Prettier for formatting
 - Consistent component structure
+
+## 📱 Mobile App
+
+LogMoments now ships with full native mobile support powered by Capacitor.
+
+### Quick Start
+- `npm run mobile:sync` – Build the web app and sync native platforms
+- `npm run mobile:android` – Open the Android project in Android Studio
+- `npm run mobile:ios` – Open the iOS project in Xcode
+- `npm run mobile:run:android` – Build, sync, and run on Android
+- `npm run mobile:run:ios` – Build, sync, and run on iOS
+
+Detailed instructions for Android & iOS builds, asset generation, and publishing workflows are available in [MOBILE.md](./MOBILE.md).
 
 ## 🚀 Deployment
 

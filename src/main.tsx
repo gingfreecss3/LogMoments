@@ -5,10 +5,13 @@ import './index.css'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { registerSW } from 'virtual:pwa-register'
 import { queryClient } from './queryClient.ts'
+import { initializeMobileApp, isNativeMobile } from './mobile'
 
-// Register the service worker
-registerSW({ immediate: true })
+if (!isNativeMobile()) {
+  registerSW({ immediate: true })
+}
 
+initializeMobileApp()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
