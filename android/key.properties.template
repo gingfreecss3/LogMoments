@@ -1,0 +1,8 @@
+# Android App Signing Configuration
+# Copy this file to key.properties and fill in your actual values
+# NEVER commit the actual key.properties file to git!
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=logmoments-key-alias
+storeFile=logmoments-release-key.keystore

@@ -157,12 +157,16 @@ cd android
 
 #### Release APK/AAB
 
-1. Generate a signing key:
+1. **Update the app version**
+   - Update `version` in `package.json`
+   - Update `versionCode` and `versionName` in `android/app/build.gradle`
+
+2. **Generate a signing key**:
 ```bash
 keytool -genkey -v -keystore my-release-key.keystore -alias my-key-alias -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-2. Create `android/key.properties`:
+3. **Create `android/key.properties`** (you can copy `android/key.properties.template` and fill in your values):
 ```properties
 storePassword=<your-store-password>
 keyPassword=<your-key-password>
@@ -170,15 +174,15 @@ keyAlias=my-key-alias
 storeFile=../my-release-key.keystore
 ```
 
-3. Build release:
+4. **Build the release APK**:
 ```bash
-cd android
-./gradlew assembleRelease
+npm run mobile:build:android
 # APK will be at: android/app/build/outputs/apk/release/app-release.apk
 ```
 
 For Google Play Store, build an AAB:
 ```bash
+cd android
 ./gradlew bundleRelease
 # AAB will be at: android/app/build/outputs/bundle/release/app-release.aab
 ```
