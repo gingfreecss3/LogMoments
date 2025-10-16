@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { offlineStorage } from '../lib/offlineStorage';
+import type { OfflineMoment } from '../lib/offlineStorage';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { Heart, WifiOff } from 'lucide-react';
 
@@ -14,6 +16,15 @@ interface MomentsTimelineProps {
 export default function MomentsTimeline({ limit, searchQuery = '' }: MomentsTimelineProps) {
   const { user } = useAuth();
   const { isOnline } = useNetworkStatus();
+  const [offlineMoments, setOfflineMoments] = useState<OfflineMoment[]>([]);
+
+  useEffect(() => {
+    const loadOfflineMoments = async () => {
+      const moments = await offlineStorage.getOfflineMoments();
+      setOfflineMoments(moments);
+    };
+    loadOfflineMoments();
+  }, []);
 
   const { data: onlineMoments = [], isLoading } = useQuery({
     queryKey: ['moments', user?.id, searchQuery],
@@ -26,7 +37,6 @@ export default function MomentsTimeline({ limit, searchQuery = '' }: MomentsTime
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      // Add search filter if searchQuery is provided
       if (searchQuery.trim()) {
         query = query.ilike('content', `%${searchQuery}%`);
       }
@@ -39,20 +49,19 @@ export default function MomentsTimeline({ limit, searchQuery = '' }: MomentsTime
     enabled: !!user && isOnline,
   });
 
-  // Get offline moments
-  const offlineMoments = offlineStorage.getOfflineMoments();
+  const filteredOfflineMoments = useMemo(() => {
+    return searchQuery.trim() 
+      ? offlineMoments.filter((moment: OfflineMoment) => 
+          moment.content.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : offlineMoments;
+  }, [offlineMoments, searchQuery]);
 
-  // Filter offline moments by search query
-  const filteredOfflineMoments = searchQuery.trim() 
-    ? offlineMoments.filter(moment => 
-        moment.content.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : offlineMoments;
-
-  // Combine online and offline moments
-  const allMoments = [...filteredOfflineMoments, ...onlineMoments]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, limit || 10);
+  const allMoments = useMemo(() => {
+    return [...filteredOfflineMoments, ...onlineMoments]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit || 10);
+  }, [filteredOfflineMoments, onlineMoments, limit]);
 
   if (isLoading && isOnline) {
     return (
@@ -91,6 +100,15 @@ export default function MomentsTimeline({ limit, searchQuery = '' }: MomentsTime
             <div key={moment.id} className="bg-white rounded-lg p-4 shadow-sm border">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
+                  {moment.photo && (
+                    <div className="mb-3 rounded-lg overflow-hidden">
+                      <img 
+                        src={moment.photo} 
+                        alt="Moment" 
+                        className="w-full h-48 object-cover"
+                      />
+                    </div>
+                  )}
                   <p className="text-gray-900 mb-2">{moment.content}</p>
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
                     <span>{moment.feeling}</span>

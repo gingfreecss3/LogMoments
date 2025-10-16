@@ -22,8 +22,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// Initialize network status listener when the app loads
-initializeNetworkListener();
+initializeNetworkListener().catch(console.error);
 
 function App() {
   return (

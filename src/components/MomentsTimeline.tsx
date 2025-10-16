@@ -1,22 +1,22 @@
 import { useLiveQuery} from 'dexie-react-hooks';
 import { useEffect } from 'react';
 import { format } from 'date-fns';
-import { Heart, WifiOff } from 'lucide-react';
+import { Heart, WifiOff, Share2 } from 'lucide-react';
 import { db } from '../lib/db';
+import { useShare } from '../hooks/useShare';
 
 interface MomentsTimelineProps {
   limit?: number;
 }
 
 export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
+  const { shareMoment, isSharing } = useShare();
+
   const allMoments = useLiveQuery(async () => {
     try {
-      console.log('Loading moments from database...');
-      // First check if the database is accessible
       const dbInfo = await db.moments.count();
       console.log('Total moments in database:', dbInfo);
       
-      // Get all moments with debugging
       const collection = db.moments.orderBy('created_at').reverse();
       const moments = limit ? await collection.limit(limit).toArray() : await collection.toArray();
       
@@ -24,7 +24,6 @@ export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
       return moments;
     } catch (error) {
       console.error('Error loading moments:', error);
-      // Try to get more detailed error info
       try {
         const dbInfo = await db.moments.toArray();
         console.log('Raw database content:', dbInfo);
@@ -35,7 +34,6 @@ export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
     }
   }, [limit]);
   
-  // Log when moments change
   useEffect(() => {
     console.log('MomentsTimeline updated with moments:', allMoments);
   }, [allMoments]);
@@ -84,7 +82,24 @@ export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
                     )}
                   </div>
                 </div>
+                <button
+                  onClick={() => shareMoment(moment.content, moment.feeling)}
+                  disabled={isSharing}
+                  className="ml-4 p-2 text-gray-400 hover:text-purple-600 transition-colors"
+                  title="Share moment"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
               </div>
+              {moment.photo && (
+                <div className="mt-3 rounded-lg overflow-hidden">
+                  <img 
+                    src={moment.photo} 
+                    alt="Moment" 
+                    className="w-full h-48 object-cover"
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

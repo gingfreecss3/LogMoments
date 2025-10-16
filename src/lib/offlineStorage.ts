@@ -1,7 +1,10 @@
-interface OfflineMoment {
+import { nativeStorage } from './nativeStorage';
+
+export interface OfflineMoment {
     id: string;
     content: string;
     feeling: string;
+    photo?: string;
     created_at: string;
     user_id: string;
     isOffline: boolean;
@@ -12,8 +15,7 @@ interface OfflineMoment {
     private readonly MOMENTS_KEY = 'thoughts_offline_moments';
     private readonly USER_KEY = 'thoughts_user_data';
   
-    // Save moment to local storage
-    saveMoment(moment: Omit<OfflineMoment, 'id' | 'isOffline' | 'synced'>): OfflineMoment {
+    async saveMoment(moment: Omit<OfflineMoment, 'id' | 'isOffline' | 'synced'>): Promise<OfflineMoment> {
       const offlineMoment: OfflineMoment = {
         ...moment,
         id: `offline_${Date.now()}_${Math.random()}`,
@@ -21,61 +23,52 @@ interface OfflineMoment {
         synced: false
       };
   
-      const existingMoments = this.getOfflineMoments();
+      const existingMoments = await this.getOfflineMoments();
       existingMoments.push(offlineMoment);
-      localStorage.setItem(this.MOMENTS_KEY, JSON.stringify(existingMoments));
+      await nativeStorage.setObject(this.MOMENTS_KEY, existingMoments);
   
       return offlineMoment;
     }
   
-    // Get all offline moments
-    getOfflineMoments(): OfflineMoment[] {
-      const moments = localStorage.getItem(this.MOMENTS_KEY);
-      return moments ? JSON.parse(moments) : [];
+    async getOfflineMoments(): Promise<OfflineMoment[]> {
+      const moments = await nativeStorage.getObject<OfflineMoment[]>(this.MOMENTS_KEY);
+      return moments || [];
     }
   
-    // Get unsynced moments
-    getUnsyncedMoments(): OfflineMoment[] {
-      return this.getOfflineMoments().filter(moment => !moment.synced);
+    async getUnsyncedMoments(): Promise<OfflineMoment[]> {
+      const moments = await this.getOfflineMoments();
+      return moments.filter(moment => !moment.synced);
     }
   
-    // Mark moment as synced
-    markAsSynced(offlineId: string) {
-      const moments = this.getOfflineMoments();
+    async markAsSynced(offlineId: string): Promise<void> {
+      const moments = await this.getOfflineMoments();
       const updatedMoments = moments.map(moment => 
         moment.id === offlineId ? { ...moment, synced: true } : moment
       );
-      localStorage.setItem(this.MOMENTS_KEY, JSON.stringify(updatedMoments));
+      await nativeStorage.setObject(this.MOMENTS_KEY, updatedMoments);
     }
   
-    // Remove synced moments
-    removeSyncedMoments() {
-      const moments = this.getOfflineMoments();
+    async removeSyncedMoments(): Promise<void> {
+      const moments = await this.getOfflineMoments();
       const unsyncedMoments = moments.filter(moment => !moment.synced);
-      localStorage.setItem(this.MOMENTS_KEY, JSON.stringify(unsyncedMoments));
+      await nativeStorage.setObject(this.MOMENTS_KEY, unsyncedMoments);
     }
   
-    // Clear all offline data
-    clearOfflineData() {
-      localStorage.removeItem(this.MOMENTS_KEY);
+    async clearOfflineData(): Promise<void> {
+      await nativeStorage.removeItem(this.MOMENTS_KEY);
     }
   
-    // Check if user is offline
     isOffline(): boolean {
       return !navigator.onLine;
     }
   
-    // Save user data for offline use
-    saveUserData(userData: any) {
-      localStorage.setItem(this.USER_KEY, JSON.stringify(userData));
+    async saveUserData(userData: any): Promise<void> {
+      await nativeStorage.setObject(this.USER_KEY, userData);
     }
   
-    // Get user data
-    getUserData(): any {
-      const userData = localStorage.getItem(this.USER_KEY);
-      return userData ? JSON.parse(userData) : null;
+    async getUserData(): Promise<any> {
+      return await nativeStorage.getObject(this.USER_KEY);
     }
   }
   
-  // Create and export the instance
   export const offlineStorage = new OfflineStorage();

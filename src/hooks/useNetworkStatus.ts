@@ -1,21 +1,14 @@
 import { atom } from 'nanostores';
 import { useStore } from '@nanostores/react';
+import { networkService } from '../lib/networkService';
 
 export const networkStatusStore = atom({ isOnline: navigator.onLine });
 
-// This function can be called once in your app's entry point (e.g., main.tsx)
-// to initialize the network event listeners.
-export function initializeNetworkListener() {
-  const handleOnline = () => networkStatusStore.set({ isOnline: true });
-  const handleOffline = () => networkStatusStore.set({ isOnline: false });
+export async function initializeNetworkListener() {
+  await networkService.initialize();
 
-  window.addEventListener('online', handleOnline);
-  window.addEventListener('offline', handleOffline);
-
-  // Return a cleanup function
-  return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
+  return async () => {
+    await networkService.removeAllListeners();
   };
 }
 
