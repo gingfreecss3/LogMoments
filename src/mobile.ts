@@ -7,6 +7,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { notificationService } from './lib/notificationService';
 import { networkService } from './lib/networkService';
 import { syncService } from './lib/syncService';
+import { cameraService } from './lib/cameraService';
 
 export const isNativeMobile = () => Capacitor.isNativePlatform();
 
@@ -25,6 +26,12 @@ export const initializeMobileApp = async () => {
 
     await notificationService.initialize();
     await networkService.initialize();
+
+    try {
+      await cameraService.requestPermissions();
+    } catch (error) {
+      console.error('Camera permissions request failed:', error);
+    }
 
     await SplashScreen.hide();
 

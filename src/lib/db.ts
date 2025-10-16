@@ -5,6 +5,7 @@ export interface Moment {
   serverId?: string; // The ID from the Supabase server, once synced
   content: string;
   feeling: string;
+  photo?: string; // Base64 data URL of photo attachment
   created_at: string;
   updated_at: string; // Track when the moment was last updated
   user_id: string;

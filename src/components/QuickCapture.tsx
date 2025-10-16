@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Heart, Edit3, Wifi, WifiOff } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Heart, Edit3, Wifi, WifiOff, Camera, Image as ImageIcon, X, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { format } from "date-fns";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
@@ -7,6 +7,8 @@ import { syncService } from "../lib/syncService";
 import { db } from "../lib/db";
 import { useMobile } from "../hooks/useMobile";
 import { notificationService } from "../lib/notificationService";
+import { cameraService } from "../lib/cameraService";
+import { offlineStorage } from "../lib/offlineStorage";
 
 const detectMood = (text: string): string => {
   const lowerText = text.toLowerCase();
@@ -24,6 +26,9 @@ export default function QuickCapture() {
   const [customDateTime, setCustomDateTime] = useState<Date | null>(null);
   const [isAdjustingTime, setIsAdjustingTime] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [isPhotoLoading, setIsPhotoLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   const { user } = useAuth();
   const { isOnline } = useNetworkStatus();
@@ -46,6 +51,7 @@ export default function QuickCapture() {
       const momentData = {
         content: content.trim(),
         feeling: detectMood(content),
+        photo: photoDataUrl || undefined,
         created_at: nowISO,
         updated_at: nowISO,
         user_id: user.id,
@@ -62,10 +68,21 @@ export default function QuickCapture() {
         const savedMoment = await db.moments.get(id);
         console.log('Retrieved saved moment:', savedMoment);
         
+        if (!isOnline) {
+          await offlineStorage.saveMoment({
+            content: momentData.content,
+            feeling: momentData.feeling,
+            photo: momentData.photo,
+            created_at: momentData.created_at,
+            user_id: momentData.user_id,
+          });
+        }
+
         // Reset form
         setContent("");
         setCustomDateTime(null);
         setIsAdjustingTime(false);
+        setPhotoDataUrl(null);
 
         // List all moments for debugging
         const allMoments = await db.moments.toArray();
@@ -100,9 +117,96 @@ export default function QuickCapture() {
     setCustomDateTime(date);
   };
 
+  const handleTakePhoto = async () => {
+    if (!cameraService.isNativePlatform()) {
+      handlePickPhoto();
+      return;
+    }
+
+    try {
+      setIsPhotoLoading(true);
+      await hapticNotification('Warning');
+      const result = await cameraService.takePhoto();
+      if (result) {
+        setPhotoDataUrl(result.dataUrl);
+        await hapticNotification('Success');
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      await hapticNotification('Error');
+    } finally {
+      setIsPhotoLoading(false);
+    }
+  };
+
+  const convertFileToDataUrl = (file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePickPhoto = async () => {
+    if (!cameraService.isNativePlatform()) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      setIsPhotoLoading(true);
+      await hapticNotification('Warning');
+      const result = await cameraService.pickPhoto();
+      if (result) {
+        setPhotoDataUrl(result.dataUrl);
+        await hapticNotification('Success');
+      }
+    } catch (error) {
+      console.error('Error picking photo:', error);
+      await hapticNotification('Error');
+    } finally {
+      setIsPhotoLoading(false);
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsPhotoLoading(true);
+      const dataUrl = await convertFileToDataUrl(file);
+      setPhotoDataUrl(dataUrl);
+      await hapticNotification('Success');
+    } catch (error) {
+      console.error('Error processing file:', error);
+      await hapticNotification('Error');
+    } finally {
+      setIsPhotoLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setPhotoDataUrl(null);
+    await hapticNotification('Success');
+  };
+
   return (<section className="p-4 sm:p-6 relative z-10">
     
       <div className="bg-white rounded-2xl shadow-lg border border-neutral-100 p-4 sm:p-6">
+        {/* Hidden file input for web platforms */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        
         {/* Network Status Indicator */}
         <div className="flex items-center justify-center mb-4">
           <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs ${
@@ -159,6 +263,54 @@ export default function QuickCapture() {
                   />
                 </div>
              </div>
+          )}
+
+          {/* Photo Attachment */}
+          {photoDataUrl ? (
+            <div className="relative bg-neutral-50 rounded-xl overflow-hidden">
+              <img 
+                src={photoDataUrl} 
+                alt="Attached" 
+                className="w-full h-48 object-cover"
+              />
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors"
+                disabled={isSubmitting}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={handleTakePhoto}
+                disabled={isPhotoLoading || isSubmitting}
+                className="flex-1 flex items-center justify-center space-x-2 p-3 border-2 border-dashed border-neutral-300 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all disabled:opacity-50"
+              >
+                {isPhotoLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+                ) : (
+                  <Camera className="w-5 h-5 text-neutral-600" />
+                )}
+                <span className="text-sm font-medium text-neutral-700">Take Photo</span>
+              </button>
+              <button
+                type="button"
+                onClick={handlePickPhoto}
+                disabled={isPhotoLoading || isSubmitting}
+                className="flex-1 flex items-center justify-center space-x-2 p-3 border-2 border-dashed border-neutral-300 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all disabled:opacity-50"
+              >
+                {isPhotoLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+                ) : (
+                  <ImageIcon className="w-5 h-5 text-neutral-600" />
+                )}
+                <span className="text-sm font-medium text-neutral-700">Choose Photo</span>
+              </button>
+            </div>
           )}
           
           {/* Text Area */}

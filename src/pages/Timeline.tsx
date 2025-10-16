@@ -100,6 +100,15 @@ export default function MomentsTimeline({ limit, searchQuery = '' }: MomentsTime
             <div key={moment.id} className="bg-white rounded-lg p-4 shadow-sm border">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
+                  {moment.photo && (
+                    <div className="mb-3 rounded-lg overflow-hidden">
+                      <img 
+                        src={moment.photo} 
+                        alt="Moment" 
+                        className="w-full h-48 object-cover"
+                      />
+                    </div>
+                  )}
                   <p className="text-gray-900 mb-2">{moment.content}</p>
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
                     <span>{moment.feeling}</span>

@@ -12,6 +12,7 @@ LogMoments leverages Capacitor to provide a native mobile experience with the fo
 - **Network Detection** - Native network status monitoring
 - **Haptic Feedback** - Tactile feedback for user interactions
 - **Share API** - Native sharing of moments
+- **Camera Integration** - Take photos or pick from gallery for moments
 - **App Lifecycle** - Proper handling of app state changes
 - **Auto-sync** - Automatic background sync when app resumes
 
@@ -35,7 +36,8 @@ LogMoments leverages Capacitor to provide a native mobile experience with the fo
 
 ### Sharing & Media
 - `@capacitor/share` - Native share functionality
-- `@capacitor/camera` - Camera and photo library access (ready for future use)
+- `@capacitor/camera` - Camera and photo library access
+- `@capacitor/filesystem` - File storage and management
 
 ## 🏗️ Architecture
 
@@ -163,6 +165,29 @@ await shareService.shareUrl('https://example.com', 'Title', 'Description');
 - ✅ Clipboard fallback
 - ✅ Formatted moment sharing
 
+### Camera & Media
+
+#### Camera Service (`src/lib/cameraService.ts`)
+
+Native camera integration with cross-platform fallbacks:
+
+```typescript
+import { cameraService } from './lib/cameraService';
+
+// Prompt user for camera or gallery selection
+const photo = await cameraService.promptPhotoSource();
+
+if (photo) {
+  console.log(photo.dataUrl);
+}
+```
+
+**Features:**
+- ✅ Native camera and gallery access on mobile
+- ✅ Automatic permission handling during app initialization
+- ✅ Uniform Data URL output for immediate previews and persistence
+- ✅ Graceful web fallback using hidden file input
+
 ### Enhanced Mobile Integration
 
 #### Mobile Module (`src/mobile.ts`)
@@ -217,6 +242,8 @@ Now includes:
 - Haptic feedback on moment capture
 - Native notifications on save
 - Success/error haptic patterns
+- Native photo capture with camera or gallery selection
+- Offline photo fallback on web with file uploads
 
 ### Enhanced MomentsTimeline
 
@@ -224,6 +251,7 @@ Now includes:
 - Share button for each moment
 - Native share sheet integration
 - Haptic feedback on share
+- Inline photo previews for captured images
 
 ## 🔧 Configuration
 
@@ -243,6 +271,10 @@ Now includes:
   }
 }
 ```
+
+### Supabase Migration
+
+To support photo attachments in the cloud, run the SQL script in `SUPABASE_MIGRATION.sql` using the Supabase SQL editor. This will add a nullable `photo` column to the `moments` table so captured images are kept in sync across devices.
 
 ## 🚀 Usage Examples
 
@@ -412,7 +444,7 @@ No data migration script needed - the nativeStorage wrapper handles it transpare
 
 Ready for implementation:
 
-- [ ] **Camera Integration** - Add photos to moments
+- [x] **Camera Integration** - Add photos to moments ✅
 - [ ] **Biometric Authentication** - Secure app with fingerprint/face ID
 - [ ] **Background Sync** - Sync even when app is closed
 - [ ] **Rich Notifications** - Add images and actions to notifications
@@ -420,6 +452,7 @@ Ready for implementation:
 - [ ] **Widget Support** - Home screen widget for quick capture
 - [ ] **Dark Mode** - Automatic theme switching
 - [ ] **Geolocation** - Tag moments with location
+- [ ] **Voice recording** - Capture audio notes with moments
 
 ## 📚 Resources
 

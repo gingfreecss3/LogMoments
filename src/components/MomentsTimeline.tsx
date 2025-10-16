@@ -91,6 +91,15 @@ export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
                   <Share2 className="w-4 h-4" />
                 </button>
               </div>
+              {moment.photo && (
+                <div className="mt-3 rounded-lg overflow-hidden">
+                  <img 
+                    src={moment.photo} 
+                    alt="Moment" 
+                    className="w-full h-48 object-cover"
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

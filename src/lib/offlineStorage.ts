@@ -4,6 +4,7 @@ export interface OfflineMoment {
     id: string;
     content: string;
     feeling: string;
+    photo?: string;
     created_at: string;
     user_id: string;
     isOffline: boolean;
