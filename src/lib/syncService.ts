@@ -2,6 +2,8 @@ import { supabase } from '../supabase';
 import { db, type Moment } from './db';
 import { networkStatusStore } from '../hooks/useNetworkStatus';
 import { notificationService } from './notificationService';
+import { logger } from './logger';
+import { SYNC_INTERVALS, ERROR_MESSAGES } from './constants';
 
 export type StorageMode = 'local' | 'cloud';
 type SyncStatus = 0 | 1; // 0 = pending/error, 1 = synced
@@ -301,13 +303,13 @@ class SyncService {
       );
 
     } catch (error) {
-      console.error('Error syncing from server:', error);
+      logger.error('Error syncing from server', error);
       return this.createSyncResult(
         false,
         0,
         1,
         0,
-        error instanceof Error ? error.message : 'Unknown error during server sync'
+        error instanceof Error ? error.message : ERROR_MESSAGES.SYNC_FAILED
       );
     }
   }
@@ -339,7 +341,7 @@ class SyncService {
       return true;
 
     } catch (error) {
-      console.error('Error deleting moment:', error);
+      logger.error('Error deleting moment', error);
       
       // If online delete fails, mark for later sync
       await db.moments.update(momentId, {
@@ -366,7 +368,7 @@ class SyncService {
         updated_at: timestamp
       });
     } catch (error) {
-      console.warn('Could not update moment sync status:', error);
+      logger.warn('Could not update moment sync status', error);
     }
   }
 
@@ -384,23 +386,34 @@ class SyncService {
   }
 
   startAutoSync() {
-    if (this.storageMode === 'local') return;
+    if (this.storageMode === 'local') {
+      logger.info('Auto-sync disabled in local storage mode');
+      return;
+    }
     
     // Initial sync
-    this.syncOfflineData();
+    this.syncOfflineData().catch((error) => {
+      logger.error('Initial sync failed', error);
+    });
 
     // Set up interval-based sync
     if (this.syncInterval) clearInterval(this.syncInterval);
     this.syncInterval = window.setInterval(() => {
-      this.syncOfflineData();
-    }, 1000 * 60 * 5); // Sync every 5 minutes
+      this.syncOfflineData().catch((error) => {
+        logger.error('Periodic sync failed', error);
+      });
+    }, SYNC_INTERVALS.AUTO_SYNC);
 
     // Set up event-based sync for when the app comes online
     window.addEventListener('online', this.handleOnline);
+    logger.info('Auto-sync enabled');
   }
 
   private handleOnline = () => {
-    this.syncOfflineData();
+    logger.info('Device came online, triggering sync');
+    this.syncOfflineData().catch((error) => {
+      logger.error('Online sync failed', error);
+    });
   };
 
   stopAutoSync() {
@@ -409,6 +422,7 @@ class SyncService {
       this.syncInterval = undefined;
     }
     window.removeEventListener('online', this.handleOnline);
+    logger.info('Auto-sync stopped');
   }
 }
 

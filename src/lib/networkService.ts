@@ -3,6 +3,7 @@ import type { ConnectionStatus } from '@capacitor/network';
 import { Capacitor } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { networkStatusStore } from '../hooks/useNetworkStatus';
+import { logger } from './logger';
 
 class NetworkService {
   private readonly isNative = Capacitor.isNativePlatform();
@@ -29,13 +30,13 @@ class NetworkService {
       this.updateNetworkStatus(status.connected);
 
       this.nativeListener = await Network.addListener('networkStatusChange', (status: ConnectionStatus) => {
-        console.log('Network status changed:', status);
+        logger.info('Network status changed', { connected: status.connected, connectionType: status.connectionType });
         this.updateNetworkStatus(status.connected);
       });
 
-      console.log('Network service initialized');
+      logger.info('Network service initialized successfully');
     } catch (error) {
-      console.error('Error initializing network service:', error);
+      logger.error('Error initializing network service', error);
       this.initializeBrowserListeners();
     }
   }
@@ -66,7 +67,7 @@ class NetworkService {
       const status = await Network.getStatus();
       return status.connected;
     } catch (error) {
-      console.error('Error getting network status:', error);
+      logger.error('Error getting network status', error);
       return navigator.onLine;
     }
   }
@@ -80,7 +81,7 @@ class NetworkService {
       const status = await Network.getStatus();
       return status.connectionType;
     } catch (error) {
-      console.error('Error getting connection type:', error);
+      logger.error('Error getting connection type', error);
       return 'unknown';
     }
   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { Heart, Edit3, Wifi, WifiOff, Camera, Image as ImageIcon, X, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { format } from "date-fns";
@@ -9,16 +9,24 @@ import { useMobile } from "../hooks/useMobile";
 import { notificationService } from "../lib/notificationService";
 import { cameraService } from "../lib/cameraService";
 import { offlineStorage } from "../lib/offlineStorage";
+import { sanitizeContent, sanitizeFeeling } from "../lib/sanitizer";
+import { logger } from "../lib/logger";
+import { ERROR_MESSAGES, INPUT_VALIDATION, MOOD_KEYWORDS } from "../lib/constants";
+import { imageProcessor } from "../lib/imageProcessor";
 
 const detectMood = (text: string): string => {
   const lowerText = text.toLowerCase();
-  if (lowerText.includes('miss') || lowerText.includes('longing')) return 'Longing';
-  if (lowerText.includes('happy') || lowerText.includes('joy')) return 'Happy';
-  if (lowerText.includes('sad') || lowerText.includes('down')) return 'Sad';
-  if (lowerText.includes('excited') || lowerText.includes('thrilled')) return 'Excited';
-  if (lowerText.includes('nostalgic') || lowerText.includes('remember')) return 'Nostalgic';
-  if (lowerText.includes('hope') || lowerText.includes('dream')) return 'Hopeful';
-  return 'Reflective';
+
+  const matchesKeywords = (keywords: readonly string[]) =>
+    keywords.some(keyword => lowerText.includes(keyword));
+
+  if (matchesKeywords(MOOD_KEYWORDS.LONGING)) return "Longing";
+  if (matchesKeywords(MOOD_KEYWORDS.HAPPY)) return "Happy";
+  if (matchesKeywords(MOOD_KEYWORDS.SAD)) return "Sad";
+  if (matchesKeywords(MOOD_KEYWORDS.EXCITED)) return "Excited";
+  if (matchesKeywords(MOOD_KEYWORDS.NOSTALGIC)) return "Nostalgic";
+  if (matchesKeywords(MOOD_KEYWORDS.HOPEFUL)) return "Hopeful";
+  return "Reflective";
 };
 
 export default function QuickCapture() {
@@ -33,85 +41,78 @@ export default function QuickCapture() {
   const { user } = useAuth();
   const { isOnline } = useNetworkStatus();
   const { hapticNotification } = useMobile();
-  const now = new Date();
 
-  useEffect(() => {
-    syncService.startAutoSync();
-  }, []);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!content.trim() || !user) return;
+    if (!user) {
+      logger.warn("Attempted to submit moment without authenticated user");
+      return;
+    }
+
+    const sanitizedContent = sanitizeContent(content);
+
+    if (sanitizedContent.length < INPUT_VALIDATION.MIN_CONTENT_LENGTH) {
+      logger.warn("Attempted to submit empty or invalid content");
+      return;
+    }
 
     setIsSubmitting(true);
 
     try {
-      console.log('Creating new moment...');
-      const nowISO = (customDateTime || now).toISOString();
+      const timestamp = (customDateTime || new Date()).toISOString();
+      const detectedMood = sanitizeFeeling(detectMood(sanitizedContent));
+
       const momentData = {
-        content: content.trim(),
-        feeling: detectMood(content),
+        content: sanitizedContent,
+        feeling: detectedMood,
         photo: photoDataUrl || undefined,
-        created_at: nowISO,
-        updated_at: nowISO,
+        created_at: timestamp,
+        updated_at: timestamp,
         user_id: user.id,
-        synced: 0, // Using 0 for false
+        synced: 0,
       };
-      console.log('Moment data to save:', momentData);
 
-      // Try to add to database
-      try {
-        const id = await db.moments.add(momentData);
-        console.log('Moment saved with ID:', id);
-        
-        // Verify it was saved
-        const savedMoment = await db.moments.get(id);
-        console.log('Retrieved saved moment:', savedMoment);
-        
-        if (!isOnline) {
-          await offlineStorage.saveMoment({
-            content: momentData.content,
-            feeling: momentData.feeling,
-            photo: momentData.photo,
-            created_at: momentData.created_at,
-            user_id: momentData.user_id,
-          });
-        }
+      const id = await db.moments.add(momentData);
+      const savedMoment = await db.moments.get(id);
 
-        // Reset form
-        setContent("");
-        setCustomDateTime(null);
-        setIsAdjustingTime(false);
-        setPhotoDataUrl(null);
-
-        // List all moments for debugging
-        const allMoments = await db.moments.toArray();
-        console.log('All moments in database:', allMoments);
-
-        if (isOnline) {
-          console.log('Online - triggering sync...');
-          syncService.syncOfflineData().catch(console.error);
-        }
-
-        void notificationService.sendMomentCapturedNotification();
-        void hapticNotification('Success');
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        const dbInfo = await db.moments.count();
-        console.log('Database record count:', dbInfo);
-        throw dbError;
+      if (!savedMoment) {
+        throw new Error(ERROR_MESSAGES.SAVE_FAILED);
       }
+
+      if (!isOnline) {
+        await offlineStorage.saveMoment({
+          content: momentData.content,
+          feeling: momentData.feeling,
+          photo: momentData.photo,
+          created_at: momentData.created_at,
+          user_id: momentData.user_id,
+        });
+      }
+
+      setContent("");
+      setCustomDateTime(null);
+      setIsAdjustingTime(false);
+      setPhotoDataUrl(null);
+
+      if (isOnline) {
+        syncService.syncOfflineData().catch((error) => {
+          logger.error("Failed to trigger sync after moment capture", error);
+        });
+      }
+
+      void notificationService.sendMomentCapturedNotification();
+      void hapticNotification("Success");
     } catch (error) {
-      console.error('Failed to save moment:', error);
-      void hapticNotification('Error');
-      alert('Failed to save your moment. Please check the console for details.');
+      logger.error("Failed to save moment", error);
+      void hapticNotification("Error");
+      alert(ERROR_MESSAGES.SAVE_FAILED);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-
-  const displayDate = customDateTime || now;
+  const displayDate = customDateTime || new Date();
 
   const setTimePreset = (date: Date) => {
     setCustomDateTime(date);
@@ -125,49 +126,42 @@ export default function QuickCapture() {
 
     try {
       setIsPhotoLoading(true);
-      await hapticNotification('Warning');
+      await hapticNotification("Warning");
       const result = await cameraService.takePhoto();
       if (result) {
         setPhotoDataUrl(result.dataUrl);
-        await hapticNotification('Success');
+        await hapticNotification("Success");
       }
     } catch (error) {
-      console.error('Error taking photo:', error);
-      await hapticNotification('Error');
+      logger.error("Error taking photo", error);
+      await hapticNotification("Error");
     } finally {
       setIsPhotoLoading(false);
     }
   };
 
-  const convertFileToDataUrl = (file: File) => {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handlePickPhoto = async () => {
+  const handlePickPhoto = () => {
     if (!cameraService.isNativePlatform()) {
       fileInputRef.current?.click();
       return;
     }
 
-    try {
-      setIsPhotoLoading(true);
-      await hapticNotification('Warning');
-      const result = await cameraService.pickPhoto();
-      if (result) {
-        setPhotoDataUrl(result.dataUrl);
-        await hapticNotification('Success');
-      }
-    } catch (error) {
-      console.error('Error picking photo:', error);
-      await hapticNotification('Error');
-    } finally {
-      setIsPhotoLoading(false);
-    }
+    setIsPhotoLoading(true);
+
+    cameraService.pickPhoto()
+      .then(async (result) => {
+        if (result) {
+          setPhotoDataUrl(result.dataUrl);
+          await hapticNotification("Success");
+        }
+      })
+      .catch(async (error) => {
+        logger.error("Error picking photo", error);
+        await hapticNotification("Error");
+      })
+      .finally(() => {
+        setIsPhotoLoading(false);
+      });
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,27 +170,32 @@ export default function QuickCapture() {
 
     try {
       setIsPhotoLoading(true);
-      const dataUrl = await convertFileToDataUrl(file);
-      setPhotoDataUrl(dataUrl);
-      await hapticNotification('Success');
+      const processedImage = await imageProcessor.processImage(file);
+      setPhotoDataUrl(processedImage.dataUrl);
+      await hapticNotification("Success");
     } catch (error) {
-      console.error('Error processing file:', error);
-      await hapticNotification('Error');
+      logger.error("Error processing file", error);
+      await hapticNotification("Error");
+      if (error instanceof Error) {
+        alert(error.message);
+      } else {
+        alert(ERROR_MESSAGES.UNSUPPORTED_FILE_TYPE);
+      }
     } finally {
       setIsPhotoLoading(false);
       if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        fileInputRef.current.value = "";
       }
     }
   };
 
   const handleRemovePhoto = async () => {
     setPhotoDataUrl(null);
-    await hapticNotification('Success');
+    await hapticNotification("Success");
   };
 
-  return (<section className="p-4 sm:p-6 relative z-10">
-    
+  return (
+    <section className="p-4 sm:p-6 relative z-10">
       <div className="bg-white rounded-2xl shadow-lg border border-neutral-100 p-4 sm:p-6">
         {/* Hidden file input for web platforms */}
         <input
@@ -251,14 +250,24 @@ export default function QuickCapture() {
                   <p className="text-xs text-neutral-500">Choose a time that feels right</p>
                 </div>
               <div className="grid grid-cols-2 gap-3">
-                 <button type="button" onClick={() => setTimePreset(new Date(now.getTime() - 3600000))} className="h-12 flex flex-col items-center justify-center border border-neutral-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-xs">1 hour ago</button>
+                 <button type="button" onClick={() => setTimePreset(new Date(Date.now() - 3600000))} className="h-12 flex flex-col items-center justify-center border border-neutral-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-xs">1 hour ago</button>
                  <button type="button" onClick={() => setTimePreset(new Date(new Date().setHours(9,0,0,0)))} className="h-12 flex flex-col items-center justify-center border border-neutral-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-xs">This morning</button>
               </div>
                <div className="border-t border-neutral-200 pt-4">
                   <label htmlFor="datetime" className="text-sm font-medium text-neutral-700 mb-2 block">Or pick a specific time</label>
                   <input
                     id="datetime" type="datetime-local"
-                    onChange={(e) => setCustomDateTime(new Date(e.target.value))}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (!value) {
+                        setCustomDateTime(null);
+                        return;
+                      }
+                      const selectedDate = new Date(value);
+                      if (!Number.isNaN(selectedDate.getTime())) {
+                        setCustomDateTime(selectedDate);
+                      }
+                    }}
                     className="w-full p-2 border rounded-md"
                   />
                 </div>
@@ -319,8 +328,14 @@ export default function QuickCapture() {
               className="w-full h-32 p-4 border border-neutral-200 rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 placeholder-neutral-400"
               placeholder="What's on your mind? Every feeling matters..."
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                const inputValue = e.target.value;
+                if (inputValue.length <= INPUT_VALIDATION.MAX_CONTENT_LENGTH) {
+                  setContent(inputValue);
+                }
+              }}
               disabled={isSubmitting}
+              maxLength={INPUT_VALIDATION.MAX_CONTENT_LENGTH}
             />
           </div>
           
@@ -328,7 +343,7 @@ export default function QuickCapture() {
           <button 
             type="submit"
             className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white py-3 rounded-xl font-medium hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:transform-none"
-            disabled={!content.trim() || isSubmitting}
+            disabled={sanitizeContent(content).length < INPUT_VALIDATION.MIN_CONTENT_LENGTH || isSubmitting}
           >
             <Heart className="h-4 w-4 mr-2" />
             {isSubmitting ? "Capturing..." : "Capture this moment"}
