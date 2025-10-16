@@ -1,4 +1,5 @@
 import { nativeStorage } from './nativeStorage';
+import { STORAGE_KEYS } from './constants';
 
 export interface OfflineMoment {
     id: string;
@@ -12,13 +13,17 @@ export interface OfflineMoment {
   }
   
   class OfflineStorage {
-    private readonly MOMENTS_KEY = 'thoughts_offline_moments';
-    private readonly USER_KEY = 'thoughts_user_data';
+    private readonly MOMENTS_KEY = STORAGE_KEYS.MOMENTS;
+    private readonly USER_KEY = STORAGE_KEYS.USER_DATA;
   
     async saveMoment(moment: Omit<OfflineMoment, 'id' | 'isOffline' | 'synced'>): Promise<OfflineMoment> {
+      const uid = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
       const offlineMoment: OfflineMoment = {
         ...moment,
-        id: `offline_${Date.now()}_${Math.random()}`,
+        id: `offline_${uid}`,
         isOffline: true,
         synced: false
       };

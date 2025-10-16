@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isNativeMobile, getMobileInfo } from '../mobile';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { logger } from '../lib/logger';
 
 interface MobileInfo {
   name: string;
@@ -35,7 +36,7 @@ export const useMobile = () => {
     try {
       await Haptics.impact({ style });
     } catch (error) {
-      console.error('Haptic feedback failed:', error);
+      logger.error('Haptic feedback failed', error);
     }
   };
 
@@ -47,7 +48,7 @@ export const useMobile = () => {
     try {
       await Haptics.notification({ type: NotificationType[type] });
     } catch (error) {
-      console.error('Haptic notification failed:', error);
+      logger.error('Haptic notification failed', error);
     }
   };
 

@@ -1,4 +1,6 @@
 import Dexie, { type Table, type Transaction } from 'dexie';
+import { logger } from './logger';
+import { DB_CONFIG } from './constants';
 
 export interface Moment {
   id?: number; // Auto-incrementing primary key from Dexie
@@ -25,9 +27,9 @@ export class MySubClassedDexie extends Dexie {
   preferences!: Table<UserPreferences>;
 
   constructor() {
-    super('thoughtsAppDatabase');
+    super(DB_CONFIG.NAME);
     
-    console.log('Initializing database...');
+    logger.info('Initializing database...');
     
     // Version 1: Initial schema
     this.version(1).stores({
@@ -52,13 +54,13 @@ export class MySubClassedDexie extends Dexie {
     
     // Migration logic for version 3
     this.version(3).upgrade(async (tx: Transaction) => {
-      console.log('Running database migration to version 3...');
+      logger.info('Running database migration to version 3...');
       
       try {
         // Ensure moments table exists and has data
         const momentsTable = tx.table('moments');
         const momentsCount = await momentsTable.count();
-        console.log(`Found ${momentsCount} moments to migrate`);
+        logger.info(`Found ${momentsCount} moments to migrate`);
         
         // If we have moments, update them to the new schema
         if (momentsCount > 0) {
@@ -70,16 +72,16 @@ export class MySubClassedDexie extends Dexie {
             // Ensure synced is a number
             if (typeof moment.synced === 'boolean') {
               updates.synced = moment.synced ? 1 : 0;
-              console.log(`Updating moment ${moment.id}: converted synced from boolean to number`);
+              logger.debug(`Updating moment ${moment.id}: converted synced from boolean to number`);
             } else if (typeof moment.synced === 'undefined') {
               updates.synced = 0;
-              console.log(`Updating moment ${moment.id}: set default synced=0`);
+              logger.debug(`Updating moment ${moment.id}: set default synced=0`);
             }
             
             // Ensure updated_at exists
             if (!moment.updated_at) {
               updates.updated_at = moment.created_at || new Date().toISOString();
-              console.log(`Updating moment ${moment.id}: added updated_at`);
+              logger.debug(`Updating moment ${moment.id}: added updated_at`);
             }
             
             // Only update if we have changes
@@ -100,12 +102,12 @@ export class MySubClassedDexie extends Dexie {
             userId: 'default-user',
             lastSynced: new Date().toISOString()
           });
-          console.log('Added default preferences record');
+          logger.info('Added default preferences record');
         }
         
-        console.log('Database migration completed successfully');
+        logger.info('Database migration completed successfully');
       } catch (error) {
-        console.error('Migration error:', error);
+        logger.error('Migration error:', error);
         throw error;
       }
     });
@@ -117,25 +119,25 @@ export class MySubClassedDexie extends Dexie {
   private setupEventHandlers() {
     // Log when database is opened
     this.on('ready', () => {
-      console.log('Database is ready');
-      console.log('Database name:', this.name);
-      console.log('Database version:', this.verno);
+      logger.info('Database is ready');
+      logger.debug('Database name:', this.name);
+      logger.debug('Database version:', this.verno);
       
       // Log the current schema
       this.tables.forEach(table => {
-        console.log(`Table: ${table.name}, Schema: ${table.schema.primKey.keyPath}`);
-        console.log('Indexes:', table.schema.indexes);
+        logger.debug(`Table: ${table.name}, Schema: ${table.schema.primKey.keyPath}`);
+        logger.debug('Indexes:', table.schema.indexes);
       });
     });
     
     // Log database close events
     this.on('close', () => {
-      console.log('Database connection closed');
+      logger.info('Database connection closed');
     });
     
     // Handle global errors
     window.addEventListener('error', (event) => {
-      console.error('Global error:', event.error || event);
+      logger.error('Global error:', event.error || event);
     });
   }
 }

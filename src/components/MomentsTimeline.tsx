@@ -1,9 +1,9 @@
 import { useLiveQuery} from 'dexie-react-hooks';
-import { useEffect } from 'react';
 import { format } from 'date-fns';
 import { Heart, WifiOff, Share2 } from 'lucide-react';
 import { db } from '../lib/db';
 import { useShare } from '../hooks/useShare';
+import { logger } from '../lib/logger';
 
 interface MomentsTimelineProps {
   limit?: number;
@@ -14,29 +14,16 @@ export default function MomentsTimeline({ limit }: MomentsTimelineProps) {
 
   const allMoments = useLiveQuery(async () => {
     try {
-      const dbInfo = await db.moments.count();
-      console.log('Total moments in database:', dbInfo);
-      
       const collection = db.moments.orderBy('created_at').reverse();
       const moments = limit ? await collection.limit(limit).toArray() : await collection.toArray();
       
-      console.log('Retrieved moments:', moments);
+      logger.debug(`Retrieved ${moments.length} moments`);
       return moments;
     } catch (error) {
-      console.error('Error loading moments:', error);
-      try {
-        const dbInfo = await db.moments.toArray();
-        console.log('Raw database content:', dbInfo);
-      } catch (e) {
-        console.error('Could not access database at all:', e);
-      }
+      logger.error('Error loading moments', error);
       return [];
     }
   }, [limit]);
-  
-  useEffect(() => {
-    console.log('MomentsTimeline updated with moments:', allMoments);
-  }, [allMoments]);
 
   if (!allMoments) {
     return (

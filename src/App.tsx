@@ -12,6 +12,8 @@ import SignUp from './pages/SignUp';
 import { syncService } from './lib/syncService';
 import { initializeNetworkListener } from './hooks/useNetworkStatus';
 import { testDatabase } from './lib/dbTest';
+import { logger } from './lib/logger';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // A protected route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -22,13 +24,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-initializeNetworkListener().catch(console.error);
-
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -36,19 +38,60 @@ function AppContent() {
   const { user } = useAuth();
 
   useEffect(() => {
-    // Run database test on app load
-    testDatabase().then(success => {
-      console.log('Database test completed:', success ? 'SUCCESS' : 'FAILED');
-    });
+    let removeListeners: (() => Promise<void>) | undefined;
 
-    // Initialize sync service with current user
-    if (user?.id) {
-      syncService.setUser(user.id);
-      syncService.startAutoSync();
-    }
-    
-    // Clean up on unmount
+    void (async () => {
+      try {
+        removeListeners = await initializeNetworkListener();
+      } catch (error) {
+        logger.error('Failed to initialize network listeners', error);
+      }
+    })();
+
     return () => {
+      if (removeListeners) {
+        removeListeners().catch((error) => {
+          logger.error('Failed to clean up network listeners', error);
+        });
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    testDatabase()
+      .then((success) => {
+        logger.info(`Database test completed: ${success ? 'SUCCESS' : 'FAILED'}`);
+      })
+      .catch((error) => {
+        logger.error('Database test execution failed', error);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      syncService.stopAutoSync();
+      return;
+    }
+
+    let isCancelled = false;
+
+    void (async () => {
+      try {
+        await syncService.setUser(user.id);
+        if (!isCancelled) {
+          syncService.startAutoSync();
+        }
+      } catch (error) {
+        logger.error('Failed to initialize sync service for user', error);
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
       syncService.stopAutoSync();
     };
   }, [user?.id]);
