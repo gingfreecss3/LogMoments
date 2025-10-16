@@ -36,6 +36,9 @@ android/.idea/
 android/local.properties
 android/*.iml
 android/.cxx/
+android/key.properties
+android/*.keystore
+android/*.jks
 
 # iOS
 ios/App/Pods/

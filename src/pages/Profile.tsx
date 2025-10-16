@@ -5,11 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import {type Moment } from '../types';
 import { Download, Trash2,  Shield, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useMobile } from '../hooks/useMobile';
 
 const ProfilePage: React.FC = () => {
   const { user, signOut } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { mobileInfo } = useMobile();
 
   const { data: moments = [] } = useQuery<Moment[]>({
     queryKey: ['moments'],
@@ -76,6 +78,12 @@ const ProfilePage: React.FC = () => {
               <span className="text-neutral-600">Data storage</span>
               <span className="text-neutral-500">Supabase Cloud</span>
             </div>
+            {mobileInfo && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-600">App version</span>
+                <span className="text-neutral-500">{mobileInfo.version} (build {mobileInfo.build})</span>
+              </div>
+            )}
           </div>
         </div>
 
